@@ -1,0 +1,24 @@
+﻿<UserControl x:Class="PdfMetadataAnalyzer.Views.ScoreCard"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:cv="clr-namespace:PdfMetadataAnalyzer.Converters">
+    <UserControl.Resources>
+        <cv:ScoreColorConverter x:Key="ScoreColor"/>
+    </UserControl.Resources>
+    <Border Style="{StaticResource CardSmall}">
+        <StackPanel>
+            <TextBlock Text="{Binding Title, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                       Style="{StaticResource TextLabel}" Margin="0,0,0,6"/>
+            <TextBlock Text="{Binding Score, RelativeSource={RelativeSource AncestorType=UserControl}, StringFormat='{}{0:F1}'}"
+                       FontSize="22" FontWeight="Bold"
+                       Foreground="{Binding Score, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource ScoreColor}}"/>
+            <ProgressBar Value="{Binding Score, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                         Maximum="100" Margin="0,6,0,4"
+                         Foreground="{Binding Score, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource ScoreColor}}"/>
+            <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="10">
+                <Run Text="{Binding TimeMs, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                <Run Text="ms"/>
+            </TextBlock>
+        </StackPanel>
+    </Border>
+</UserControl>

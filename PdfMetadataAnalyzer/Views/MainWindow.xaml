@@ -1,0 +1,403 @@
+﻿<Window x:Class="PdfMetadataAnalyzer.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:PdfMetadataAnalyzer.ViewModels"
+        xmlns:cv="clr-namespace:PdfMetadataAnalyzer.Converters"
+        xmlns:local="clr-namespace:PdfMetadataAnalyzer.Views"
+        xmlns:models="clr-namespace:PdfMetadataAnalyzer.Models"
+        Title="PDF Metadata Analyzer — Research Tool"
+        Height="860" Width="1320" MinHeight="680" MinWidth="1000"
+        Background="{StaticResource BgDeepBrush}"
+        WindowStartupLocation="CenterScreen">
+
+    <Window.DataContext>
+        <vm:MainViewModel/>
+    </Window.DataContext>
+
+    <Window.Resources>
+        <cv:BoolToVisibilityConverter        x:Key="BoolVis"/>
+        <cv:InverseBoolToVisibilityConverter x:Key="InvBoolVis"/>
+        <cv:NullToVisibilityConverter        x:Key="NullVis"/>
+        <cv:ConfidenceColorConverter         x:Key="ConfColor"/>
+        <cv:ScoreColorConverter              x:Key="ScoreColor"/>
+        <cv:BoolToYesNoConverter             x:Key="BoolYN"/>
+        <cv:SuccessToIconConverter           x:Key="SuccessIcon"/>
+        <cv:SuccessToColorConverter          x:Key="SuccessColor"/>
+        <cv:PdfTypeDisplayConverter          x:Key="PdfTypeDisplay"/>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="56"/>
+            <RowDefinition Height="44"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="32"/>
+        </Grid.RowDefinitions>
+
+        <!-- ══ HEADER ════════════════════════════════════════════════ -->
+        <Border Grid.Row="0" Background="{StaticResource BgSurfaceBrush}"
+                BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+            <Grid Margin="20,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Width="32" Height="32" Background="{StaticResource AccentBrush}"
+                            CornerRadius="8" Margin="0,0,12,0">
+                        <TextBlock Text="PDF" Foreground="White" FontWeight="Bold" FontSize="10"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="PDF Metadata Analyzer" Style="{StaticResource TextHeading}"/>
+                        <TextBlock Text="PdfPig · PDFsharp · Tesseract OCR" Style="{StaticResource TextLabel}" FontSize="10"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="+ Add Files"  Command="{Binding AddFilesCmd}"  Style="{StaticResource BtnPrimary}"   Margin="0,0,8,0"/>
+                    <Button Content="+ Add Folder" Command="{Binding AddFolderCmd}" Style="{StaticResource BtnSecondary}" Margin="0,0,8,0"/>
+                    <Button Content="Extract All"  Command="{Binding ExtractAllCmd}" Style="{StaticResource BtnPrimary}"  Margin="0,0,8,0"/>
+                    <Button Content="Export JSON"  Command="{Binding ExportJsonCmd}" Style="{StaticResource BtnSecondary}" Margin="0,0,8,0"/>
+                    <Button Content="Export CSV"   Command="{Binding ExportCsvCmd}"  Style="{StaticResource BtnSecondary}" Margin="0,0,8,0"/>
+                    <Button Content="Clear"        Command="{Binding ClearAllCmd}"   Style="{StaticResource BtnSecondary}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ══ PDF TYPE SELECTOR ════════════════════════════════════════ -->
+        <Border Grid.Row="1" Background="{StaticResource BgSurfaceBrush}"
+                BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+            <Grid Margin="20,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="220"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0" Text="PDF Type:" Style="{StaticResource TextLabel}"
+                           VerticalAlignment="Center" Margin="0,0,10,0"/>
+
+                <ComboBox Grid.Column="1"
+                        Style="{StaticResource ComboBoxDark}"
+                        ItemsSource="{Binding AvailableTypes}"
+                        SelectedItem="{Binding SelectedType, Mode=TwoWay}"
+                        VerticalAlignment="Center">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Converter={StaticResource PdfTypeDisplay}}"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+
+                <TextBlock Grid.Column="2" Text="{Binding SelectedTypeDescription}"
+                           Style="{StaticResource TextLabel}" FontStyle="Italic"
+                           VerticalAlignment="Center" Margin="14,0,0,0"
+                           TextTrimming="CharacterEllipsis"/>
+
+                <CheckBox Grid.Column="3" Content="Recursive" IsChecked="{Binding Recursive}"
+                          VerticalAlignment="Center"
+                          Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"/>
+            </Grid>
+        </Border>
+
+        <!-- ══ MAIN CONTENT ══════════════════════════════════════════ -->
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="280" MinWidth="200"/>
+                <ColumnDefinition Width="4"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- ── LEFT PANEL: File list ─────────────────────────────── -->
+            <Border Grid.Column="0" Background="{StaticResource BgSurfaceBrush}"
+                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <Border Grid.Row="0" Padding="12,10" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+                        <TextBlock VerticalAlignment="Center"
+                                   Text="{Binding Files.Count, StringFormat='Files ({0})'}"
+                                   Style="{StaticResource TextHeading}"/>
+                    </Border>
+
+                    <ListBox Grid.Row="1"
+                             ItemsSource="{Binding Files}"
+                             SelectedItem="{Binding SelectedFile}"
+                             Background="Transparent" BorderThickness="0"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             Padding="6">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem" BasedOn="{StaticResource FileListItem}"/>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="20"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBlock Grid.Column="0" Text="{Binding StatusIcon}"
+                                               Foreground="{Binding StatusColor}" FontSize="12" VerticalAlignment="Center"/>
+
+                                    <StackPanel Grid.Column="1" Margin="6,0">
+                                        <TextBlock Text="{Binding Name}" Style="{StaticResource TextBody}"
+                                                   FontSize="11" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding SizeLabel}" Style="{StaticResource TextLabel}" FontSize="10"/>
+                                    </StackPanel>
+
+                                    <Border Grid.Column="2" Margin="0,0,4,0"
+                                            Visibility="{Binding OcrBadge, Converter={StaticResource NullVis}}"
+                                            Background="#1FD29922" CornerRadius="4" Padding="4,2">
+                                        <TextBlock Text="{Binding OcrBadge}" Foreground="{StaticResource WarningBrush}" FontSize="8" FontWeight="Bold"/>
+                                    </Border>
+
+                                    <Border Grid.Column="3"
+                                            Visibility="{Binding ScoreLabel, Converter={StaticResource NullVis}}"
+                                            Background="#1F388BFD" CornerRadius="4" Padding="5,2">
+                                        <TextBlock Text="{Binding ScoreLabel}" Foreground="{StaticResource AccentBrush}" FontSize="10" FontWeight="SemiBold"/>
+                                    </Border>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <Border Grid.Row="2" Padding="8" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0">
+                        <Button Content="Extract Selected" Command="{Binding ExtractOneCmd}"
+                                Style="{StaticResource BtnSecondary}" HorizontalAlignment="Stretch"/>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch" Background="{StaticResource BorderBrush}"/>
+
+            <!-- ── RIGHT PANEL: Results ──────────────────────────────── -->
+            <Grid Grid.Column="2">
+
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Visibility="{Binding HasResult, Converter={StaticResource InvBoolVis}}">
+                    <TextBlock Text="📄" FontSize="48" HorizontalAlignment="Center" Margin="0,0,0,16"/>
+                    <TextBlock Text="Select a PDF type, add files, then extract" Style="{StaticResource TextBody}"
+                               Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
+                </StackPanel>
+
+                <Grid Visibility="{Binding HasResult, Converter={StaticResource BoolVis}}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <Border Grid.Row="0" Padding="16,10" Background="{StaticResource BgSurfaceBrush}"
+                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding CurrentResult.FileName}" Style="{StaticResource TextHeading}" FontSize="14"/>
+                                    <Border Margin="8,0,0,0" Padding="6,2" CornerRadius="4" Background="#1F388BFD">
+                                        <TextBlock Text="{Binding CurrentResult.SelectedType, Converter={StaticResource PdfTypeDisplay}}"
+                                                   FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}"/>
+                                    </Border>
+                                    <Border Margin="6,0,0,0" Padding="6,2" CornerRadius="4" Background="#1FD29922"
+                                            Visibility="{Binding CurrentResult.OcrWasUsed, Converter={StaticResource BoolVis}}">
+                                        <TextBlock Text="⚠ OCR applied" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource WarningBrush}"/>
+                                    </Border>
+                                </StackPanel>
+                                <TextBlock Text="{Binding CurrentResult.FileInfoLabel}" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </StackPanel>
+
+                            <Border Grid.Column="1" CornerRadius="8" Padding="14,8" Background="#1F388BFD" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding CurrentResult.Scores.CombinedScore, StringFormat='{}{0:F1}'}"
+                                               FontSize="22" FontWeight="Bold"
+                                               Foreground="{Binding CurrentResult.Scores.CombinedScore, Converter={StaticResource ScoreColor}}"/>
+                                    <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding CurrentResult.Scores.Grade}" Foreground="{StaticResource AccentBrush}" FontWeight="SemiBold" FontSize="12"/>
+                                        <TextBlock Text="Combined Score" Foreground="{StaticResource TextSecondaryBrush}" FontSize="10"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Row="1" Padding="12,10" Background="{StaticResource BgSurfaceBrush}"
+                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <local:ScoreCard Grid.Column="0" Title="PdfPig"
+                                Score="{Binding CurrentResult.Scores.PdfPigScore}"
+                                TimeMs="{Binding CurrentResult.Scores.PdfPigMs}" Margin="0,0,8,0"/>
+                            <local:ScoreCard Grid.Column="1" Title="PDFsharp"
+                                Score="{Binding CurrentResult.Scores.PdfSharpScore}"
+                                TimeMs="{Binding CurrentResult.Scores.PdfSharpMs}" Margin="0,0,8,0"/>
+                            <local:ScoreCard Grid.Column="2" Title="Tesseract OCR"
+                                Score="{Binding CurrentResult.Scores.OcrScore}"
+                                TimeMs="{Binding CurrentResult.Scores.OcrMs}" Margin="0,0,8,0"/>
+                            <local:ScoreCard Grid.Column="3" Title="Combined"
+                                Score="{Binding CurrentResult.Scores.CombinedScore}"
+                                TimeMs="{Binding CurrentResult.Scores.TotalMs}"/>
+                        </Grid>
+                    </Border>
+
+                    <TabControl Grid.Row="2">
+
+                        <TabItem Header="Metadata">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16">
+                                <StackPanel>
+                                    <TextBlock Text="Metadata Fields" Style="{StaticResource TextHeading}" Margin="0,0,0,10"/>
+                                    <ItemsControl ItemsSource="{Binding CurrentResult.Fields}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <local:MetadataRow Label="{Binding Key}" Field="{Binding Value}"
+                                                                   CopyCmd="{Binding DataContext.CopyFieldCmd, RelativeSource={RelativeSource AncestorType=ItemsControl}}"/>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <Separator Margin="0,14"/>
+                                    <TextBlock Text="Document Properties" Style="{StaticResource TextHeading}" Margin="0,0,0,10"/>
+                                    <UniformGrid Rows="2" Columns="3">
+                                        <local:PropCard Label="Page Count" Value="{Binding CurrentResult.PageCount}" Margin="0,0,8,8"/>
+                                        <local:PropCard Label="PDF Version" Value="{Binding CurrentResult.PdfVersion}" Margin="0,0,8,8"/>
+                                        <local:PropCard Label="Word Count" Value="{Binding CurrentResult.WordCount}" Margin="0,0,0,8"/>
+                                        <local:PropCard Label="Font Count" Value="{Binding CurrentResult.Fonts.Count}" Margin="0,0,8,0"/>
+                                        <local:PropCard Label="Form Fields" Value="{Binding CurrentResult.FieldCount}" Margin="0,0,8,0"/>
+                                        <local:PropCard Label="Bookmarks" Value="{Binding CurrentResult.BookmarkCount}"/>
+                                    </UniformGrid>
+
+                                    <Separator Margin="0,14"/>
+                                    <TextBlock Text="Permissions &amp; Flags" Style="{StaticResource TextHeading}" Margin="0,0,0,10"/>
+                                    <WrapPanel>
+                                        <local:PermBadge Label="Encrypted" Allowed="{Binding CurrentResult.IsEncrypted}"/>
+                                        <local:PermBadge Label="Tagged" Allowed="{Binding CurrentResult.IsTagged}"/>
+                                        <local:PermBadge Label="Has AcroForm" Allowed="{Binding CurrentResult.HasAcroForm}"/>
+                                        <local:PermBadge Label="Can Print" Allowed="{Binding CurrentResult.CanPrint}"/>
+                                        <local:PermBadge Label="Can Copy" Allowed="{Binding CurrentResult.CanCopy}"/>
+                                    </WrapPanel>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </TabItem>
+
+                        <TabItem Header="Tool Comparison">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16">
+                                <StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <local:LibraryCard Grid.Column="0" Raw="{Binding CurrentResult.PdfPigRaw}" Margin="0,0,8,0"/>
+                                        <local:LibraryCard Grid.Column="1" Raw="{Binding CurrentResult.PdfSharpRaw}" Margin="0,0,8,0"/>
+                                        <local:LibraryCard Grid.Column="2" Raw="{Binding CurrentResult.OcrRaw}"
+                                                            Visibility="{Binding CurrentResult.OcrWasUsed, Converter={StaticResource BoolVis}}"/>
+                                    </Grid>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </TabItem>
+
+                        <TabItem Header="Batch Summary" Visibility="{Binding HasBatch, Converter={StaticResource BoolVis}}">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16">
+                                <StackPanel>
+                                    <UniformGrid Rows="1" Columns="5" Margin="0,0,0,16">
+                                        <local:PropCard Label="Total Files" Value="{Binding BatchSummary.Total}" Margin="0,0,8,0"/>
+                                        <local:PropCard Label="Succeeded" Value="{Binding BatchSummary.Succeeded}" Margin="0,0,8,0"/>
+                                        <local:PropCard Label="Avg Combined" Value="{Binding BatchSummary.AvgCombined, StringFormat='{}{0:F1}'}" Margin="0,0,8,0"/>
+                                        <local:PropCard Label="Avg PdfPig" Value="{Binding BatchSummary.AvgPdfPig, StringFormat='{}{0:F1}'}" Margin="0,0,8,0"/>
+                                        <local:PropCard Label="Avg Time (ms)" Value="{Binding BatchSummary.AvgMs, StringFormat='{}{0:F0}'}"/>
+                                    </UniformGrid>
+
+                                    <DataGrid ItemsSource="{Binding BatchSummary.Results}"
+                                              AutoGenerateColumns="False" Background="Transparent"
+                                              Foreground="{StaticResource TextPrimaryBrush}"
+                                              BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                                              RowBackground="{StaticResource BgCardBrush}"
+                                              AlternatingRowBackground="{StaticResource BgSurfaceBrush}"
+                                              GridLinesVisibility="Horizontal"
+                                              HorizontalGridLinesBrush="{StaticResource BorderBrush}"
+                                              HeadersVisibility="Column" CanUserAddRows="False" IsReadOnly="True" FontSize="11">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="File" Binding="{Binding FileName}" Width="170"/>
+                                            <DataGridTextColumn Header="Title" Binding="{Binding Title.Value}" Width="150"/>
+                                            <DataGridTextColumn Header="Pages" Binding="{Binding PageCount}" Width="55"/>
+                                            <DataGridTextColumn Header="Words" Binding="{Binding WordCount}" Width="60"/>
+                                            <DataGridTextColumn Header="PdfPig" Binding="{Binding Scores.PdfPigScore, StringFormat='{}{0:F1}'}" Width="65"/>
+                                            <DataGridTextColumn Header="PDFsharp" Binding="{Binding Scores.PdfSharpScore, StringFormat='{}{0:F1}'}" Width="70"/>
+                                            <DataGridTextColumn Header="OCR" Binding="{Binding Scores.OcrScore, StringFormat='{}{0:F1}'}" Width="55"/>
+                                            <DataGridTextColumn Header="Combined" Binding="{Binding Scores.CombinedScore, StringFormat='{}{0:F1}'}" Width="75"/>
+                                            <DataGridTextColumn Header="Grade" Binding="{Binding Scores.Grade}" Width="65"/>
+                                            <DataGridTextColumn Header="Fields" Binding="{Binding Scores.FieldsFound}" Width="55"/>
+                                            <DataGridTextColumn Header="Time (ms)" Binding="{Binding Scores.TotalMs}" Width="70"/>
+                                        </DataGrid.Columns>
+                                        <DataGrid.ColumnHeaderStyle>
+                                            <Style TargetType="DataGridColumnHeader">
+                                                <Setter Property="Background" Value="{StaticResource BgSurfaceBrush}"/>
+                                                <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                                <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+                                                <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                                                <Setter Property="Padding" Value="10,7"/>
+                                                <Setter Property="FontSize" Value="11"/>
+                                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                            </Style>
+                                        </DataGrid.ColumnHeaderStyle>
+                                    </DataGrid>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </TabItem>
+
+                    </TabControl>
+                </Grid>
+            </Grid>
+        </Grid>
+
+        <!-- ══ STATUS BAR ════════════════════════════════════════════ -->
+        <Border Grid.Row="3" Background="{StaticResource BgSurfaceBrush}"
+                BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0">
+            <Grid Margin="16,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="220"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="{Binding StatusText}" Style="{StaticResource TextLabel}" VerticalAlignment="Center"/>
+                <ProgressBar Grid.Column="1" Value="{Binding Progress}" Maximum="100" VerticalAlignment="Center"
+                             Visibility="{Binding IsBusy, Converter={StaticResource BoolVis}}"/>
+            </Grid>
+        </Border>
+
+        <!-- ══ BUSY OVERLAY ══════════════════════════════════════════ -->
+        <Grid Grid.Row="2" Visibility="{Binding IsBusy, Converter={StaticResource BoolVis}}" Background="#AA000000">
+            <Border Background="{StaticResource BgCardBrush}" CornerRadius="12" Padding="40,28"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                <StackPanel HorizontalAlignment="Center">
+                    <TextBlock Text="Processing..." FontSize="16" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Center" Margin="0,0,0,14"/>
+                    <ProgressBar Value="{Binding Progress}" Maximum="100" Width="240" Height="6"/>
+                    <TextBlock Text="{Binding StatusText}" Style="{StaticResource TextLabel}"
+                               HorizontalAlignment="Center" Margin="0,10,0,0" MaxWidth="240" TextWrapping="Wrap" TextAlignment="Center"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+    </Grid>
+</Window>
